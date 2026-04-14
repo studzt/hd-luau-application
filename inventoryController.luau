@@ -192,7 +192,7 @@ local function updateInv(tab, force)
 
         -- Clear old items
 		local container = invMain.container.ScrollingFrame
-		for _,item in pairs(container:GetChildren()) do
+		for _, item in pairs(container:GetChildren()) do
 			if item:IsA("ImageButton") and item.Name ~= "template" then
                 item:Destroy()
             end
@@ -207,7 +207,7 @@ local function updateInv(tab, force)
         -- Goes through every category and displays each item
 		local items = 0
 		for categoryName, categoryData in pairs(inventory) do
-			for _,item in pairs(categoryData.all) do
+			for _, item in pairs(categoryData.all) do
                 -- Continues if the item is not valid (not a table or empty)
 				if typeof(item) ~= "table" or not next(item) then
                     continue
@@ -243,7 +243,7 @@ end
 
 -- Hides all others UIs
 local function hideHub()
-	for _,ui in pairs(hub:GetChildren()) do
+	for _, ui in pairs(hub:GetChildren()) do
 		if
             not ui:IsA("Folder")
             or not ui:FindFirstChild("Main")
@@ -359,7 +359,7 @@ function inventoryController:KnitStart()
 	end
 
     -- Setup slot buttons
-	for _,slot in pairs(slots.slotsFrame:GetChildren()) do
+	for _, slot in pairs(slots.slotsFrame:GetChildren()) do
 		if not slot:IsA("GuiObject") then
             continue
         end
