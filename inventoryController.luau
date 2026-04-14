@@ -1,5 +1,4 @@
 --[[
-    Inventory Controller
     This script handles the client-side inventory system,
     including UI rendering, item preview, and equipment logic.
 
@@ -12,54 +11,59 @@
 ]]
 
 --// Services & Modules
-local Lighting = game:GetService("Lighting")
 local RS = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
-local Knit = require(RS.packages.Knit)
-local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 
+local Knit = require(RS.packages.Knit)
 local UIhandler = require(RS.modules.UIhandler)
 
 local inventoryService
 
 --// Utils
-local Player = Players.LocalPlayer
-local Hub = Player.PlayerGui:WaitForChild("Hub")
-local Blur = Lighting.Blur
-local Main = Hub.Inventory.Main
+local player = Players.LocalPlayer
+local blur = Lighting.Blur
 
 --// UI
-local closeBtn = Main.close
-local equipBtn = Main.preview.desc.equip
+local hub = player.PlayerGui:WaitForChild("Hub")
+local main = player.PlayerGui:WaitForChild("Main")
+local invMain = hub.Inventory.Main
 
-local preview = Main.preview.image
-local previewTitle = Main.preview.title.TextLabel
+local invBtn = main.mainButtons.inventory
+local closeBtn = invMain.close
+local equipBtn = invMain.preview.desc.equip
+
+local preview = invMain.preview.image
+local previewTitle = invMain.preview.title.TextLabel
 local previewRarity = preview.rarity
-local previewDesc = Main.preview.desc.TextLabel
+local previewDesc = invMain.preview.desc.TextLabel
 
-local topic_accessories = Main.topics.accessories
-local topic_emotes = Main.topics.emotes
+local topic_accessories = invMain.topics.accessories
+local topic_emotes = invMain.topics.emotes
 local slots = preview.Parent.desc.slots
 
 --// Constants
-local lastTab
-local controllersCache = {}
-local isUpdating = false
+local LAST_TAB
+local CONTROLLERS_CACHE = {}
+local IS_UPDATING = false
 
 --// Tweens
-local invHiddenPos = Main.Position + UDim2.fromOffset(0, 20)
+local invHiddenPos = invMain.Position + UDim2.fromOffset(0, 20)
 local inventoryTween = TweenService:Create(
-	Main,
+	invMain,
 	TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-	{Position = Main.Position}
+	{Position = invMain.Position}
 )
 
 --// Local functions
 -- Render the preview of an item
 local function renderItem(frame, item, stroke)
 	if item.category == "nametags" then
-		local textColor = Color3.fromHex(string.match(item.content, "#%x%x%x%x%x%x") or "#FFFFFF") -- Extracts the <font color> param from nametag content
+		local textColor = Color3.fromHex(string.match(item.content, "#%x%x%x%x%x%x") -- Extracts the <font color> param from nametag content
+            or "#FFFFFF") -- Or #FFFFFF
+
 		local darkerTxtColor = Color3.new(
 			math.clamp(textColor.R * 0.5, 0, 1),
 			math.clamp(textColor.G * 0.5, 0, 1),
@@ -67,26 +71,33 @@ local function renderItem(frame, item, stroke)
 		) -- Darker text color for the stroke
 
 		frame.TextLabel.Text = item.content
-		if stroke then frame.TextLabel.UIStroke.Color = darkerTxtColor end
+
+		if stroke then
+            frame.TextLabel.UIStroke.Color = darkerTxtColor
+        end
+
 		frame.TextLabel.Visible = true
 
 	elseif item.category == "emotes" then
         -- Preparing the dummy
-		local Dummy = frame.ViewportFrame.WorldModel.Dummy
-		local Animation = frame.Animation
-		local animController = Dummy:FindFirstChildWhichIsA("AnimationController") or Instance.new("AnimationController", Dummy)
-		local Animator = animController:FindFirstChildOfClass("Animator") or Instance.new("Animator", animController)
+		local dummy = frame.ViewportFrame.WorldModel.Dummy
+
+		local animation = frame.Animation
+		local animController = dummy:FindFirstChildWhichIsA("AnimationController") or Instance.new("AnimationController", dummy)
+		local animator = animController:FindFirstChildOfClass("Animator") or Instance.new("Animator", animController)
 
         -- Stops all other animations that the dummy may be playing
-		for _, track in ipairs(Animator:GetPlayingAnimationTracks()) do
+		for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
 			track:Stop()
 		end
 
         -- Loads and play the new animation
-		Animation.AnimationId = "rbxassetid://"..item.animId
-		local animTrack = Animator:LoadAnimation(Animation)
+		animation.AnimationId = "rbxassetid://"..item.animId
+
+		local animTrack = animator:LoadAnimation(animation)
 		animTrack.Looped = true
 		animTrack:Play()
+
 		frame.ViewportFrame.Visible = true
 	end
 end
@@ -100,18 +111,21 @@ end
 
 -- Handles when the player clicks an item
 local function handleItemClick(item, equipped: boolean)
-	if not item then return end
+	if not item then
+        return
+    end
 
     -- Resetting and displaying the item in the preview
 	resetPreview()
+
 	previewTitle.Text = item.name
 	previewRarity.Text = item.rarityName
 	previewRarity.TextColor = BrickColor.new(item.rarityColor)
 	previewDesc.Text = item.description
+
 	renderItem(preview, item, false)
 
 	-- Equip button handling
-	local equipBtn = equipBtn.properties.Object
 	if not equipped then
 		equipBtn.ImageColor3 = Color3.new(0.262745, 0.768627, 0.380392)
 		equipBtn.TextLabel.Text = "equip"
@@ -129,15 +143,16 @@ end
 
 -- Creates a new item in the item list
 local function createItem(item, isEquipped)
-	local container = Main.container.ScrollingFrame
+	local container = invMain.container.ScrollingFrame
 
     -- Preparing the template and rendering the new item
 	local template = container.template:Clone()
 	template.Name = item.name
-    template.LayoutOrder = isEquipped and -item.rarity or (-item.rarity + 10)
+    template.LayoutOrder = if isEquipped then -item.rarity else -item.rarity + 10 -- Shows equipped items on top of unequipped ones
     template.ImageColor3 = item.rarityColor
     template.Parent = container
-	renderItem(template, item, true) -- Rendering the item
+
+	renderItem(template, item, true)
 
     -- Custom background if the item is equipped, to highlight him.
 	if isEquipped then
@@ -154,8 +169,10 @@ end
 
 -- Updates the inventory
 local function updateInv(tab, force)
-	if isUpdating then return end
-	isUpdating = true -- Debounce to prevent duplicated items
+	if IS_UPDATING then
+        return
+    end
+	IS_UPDATING = true -- Debounce to prevent duplicated items
 
 	local success, result = pcall(function()
 		local categoryMap = {
@@ -165,70 +182,85 @@ local function updateInv(tab, force)
 
         -- Get the items requested from categoryMap
 		local requestedCategories = categoryMap[tab]
-		if not requestedCategories then return end
-
-        -- Dont update the inventory again if the current tab is the requested one
-		if tab == lastTab and not force then return end
-		lastTab = tab
+		if
+            not requestedCategories
+            or (tab == LAST_TAB and not force) -- Dont update the inventory again if the current tab is the requested one
+        then
+            return
+        end
+		LAST_TAB = tab
 
         -- Clear old items
-		local Container = Main.container.ScrollingFrame
-		for _,v in pairs(Container:GetChildren()) do
-			if v:IsA("ImageButton") and v.Name ~= "template" then v:Destroy() end
+		local container = invMain.container.ScrollingFrame
+		for _,item in pairs(container:GetChildren()) do
+			if item:IsA("ImageButton") and item.Name ~= "template" then
+                item:Destroy()
+            end
 		end
 
         -- Getting the player inventory
 		local success, inventory = inventoryService:getInventory(requestedCategories):await()
-		if not success then return end
+		if not success then
+            return
+        end
 
-		local items = 0 -- Counting to know if there is atleast one item in inventory
+        -- Goes through every category and displays each item
+		local items = 0
 		for categoryName, categoryData in pairs(inventory) do
 			for _,item in pairs(categoryData.all) do
-				if typeof(item) ~= "table" or next(item) == nil then continue end -- Return if the item is not valid (not a table or empty table)
+                -- Continues if the item is not valid (not a table or empty)
+				if typeof(item) ~= "table" or not next(item) then
+                    continue
+                end
 				items += 1
 
                 -- Checks if the item is equipped
-				local isEquipped = false
-				if item.category == "emotes" then
-					for _, equippedEmote in pairs(categoryData.equipped) do -- Go through every equipped emote
-						if equippedEmote[item.id] then
-							isEquipped = true
-							break
-						end
-					end
+                local isEquipped = false
+                if item.category == "emotes" then
+                    for _, equippedEmote in pairs(categoryData.equipped) do
+                        if equippedEmote[item.id] then
+                            isEquipped = true
+                            break
+                        end
+                    end
 
-				elseif item.category == "nametags" then
-					if categoryData.equipped[item.id] then -- Just checking if the nametag is equipped or not
-						isEquipped = true
-					end
-				end
+                elseif item.category == "nametags" then
+                    if categoryData.equipped[item.id] then
+                        isEquipped = true
+                    end
+                end
 
-				createItem(item, isEquipped) -- Finally, creating the item (showing it in inventory)
+				createItem(item, isEquipped)
 			end
 		end
 
-		Container.Parent.TextLabel.Visible = items == 0 -- Shows a text if the inventory is empty
+		container.Parent.TextLabel.Visible = items == 0 -- Shows a text if the inventory is empty
 	end)
 
 	if not success then warn(result) end
-	isUpdating = false
+	IS_UPDATING = false
 end
 
 -- Hides all others UIs
 local function hideHub()
-	for _,ui in pairs(Hub:GetChildren()) do
-		if not ui:IsA("Folder") then continue end
-		if not ui:FindFirstChild("Main") or not ui.Main:IsA("ImageLabel") then continue end
-		if not ui.Main.Visible then continue end
+	for _,ui in pairs(hub:GetChildren()) do
+		if
+            not ui:IsA("Folder")
+            or not ui:FindFirstChild("Main")
+            or not ui.Main:IsA("ImageLabel")
+            or not ui.Main.Visible
+        then
+            continue
+        end
 
 		local controllerName = ui.Main:GetAttribute("controller") -- Getting the controller for the UI
 
-		if controllersCache[controllerName] then
-			controllersCache[controllerName]:toggleUI()
+		if CONTROLLERS_CACHE[controllerName] then
+			CONTROLLERS_CACHE[controllerName]:toggleUI()
 		else
             -- Caching the controller to not require it every time
 			local controller = Knit.GetController(controllerName)
-			controllersCache[controllerName] = controller
+			CONTROLLERS_CACHE[controllerName] = controller
 			controller:toggleUI()
 		end
 	end
@@ -241,23 +273,21 @@ local inventoryController = Knit.CreateController {
 
 -- Toggle inventory UI
 function inventoryController:toggleUI()
-	if not Main.Visible then
+	if not invMain.Visible then
 		hideHub()
 
-        -- Showing the inventory, background and blur
-		Main.Position = invHiddenPos
-		Main.Visible = true
-		Hub.background.BackgroundColor3 = Color3.fromRGB(43, 33, 10)
-		Hub.background.Visible = true
-		Blur.Size = 20
+		invMain.Position = invHiddenPos
+		invMain.Visible = true
+		hub.background.BackgroundColor3 = Color3.fromRGB(43, 33, 10)
+		hub.background.Visible = true
+		blur.Size = 20
 
-		inventoryTween:Play() -- Inventory opening animation
+		inventoryTween:Play()
 		updateInv("accessories")
 	else
-        -- Hides the inventory, background and blur
-		Main.Visible = false
-		Hub.background.Visible = false
-		Blur.Size = 0
+		invMain.Visible = false
+		hub.background.Visible = false
+		blur.Size = 0
 	end
 end
 
@@ -265,32 +295,38 @@ end
 function inventoryController:KnitStart()
 	inventoryService = Knit.GetService("inventoryService")
 
-    local invBtn = Player.PlayerGui:WaitForChild("Main").mainButtons.inventory
-
     -- Setup UI handlers
-    invBtn = UIhandler.new(invBtn, { Pc = Enum.KeyCode.E, Xbox = Enum.KeyCode.ButtonY })
-	topic_accessories = UIhandler.new(topic_accessories, { Pc = Enum.KeyCode.One })
-	topic_emotes = UIhandler.new(topic_emotes, { Pc = Enum.KeyCode.Two })
+    local invBtnHandler = UIhandler.new(invBtn,
+        {
+            Pc = Enum.KeyCode.E,
+            Xbox = Enum.KeyCode.ButtonY
+        }
+    )
+	local topic_accessoriesHandler = UIhandler.new(topic_accessories,
+        { Pc = Enum.KeyCode.One }
+    )
+	local topic_emotesHandler = UIhandler.new(topic_emotes,
+        { Pc = Enum.KeyCode.Two }
+    )
 
-	equipBtn = UIhandler.new(equipBtn)
-	closeBtn = UIhandler.new(closeBtn)
+	local equipBtnHandler = UIhandler.new(equipBtn)
+	local closeBtnHandler = UIhandler.new(closeBtn)
 
     -- Handle each button when clicked
-    invBtn.Clicked = function()
+    invBtnHandler.Clicked = function()
 		inventoryController:toggleUI()
 	end
-	topic_accessories.Clicked = function()
+	topic_accessoriesHandler.Clicked = function()
 		updateInv("accessories")
 	end
-	topic_emotes.Clicked = function()
+	topic_emotesHandler.Clicked = function()
 		updateInv("emotes")
 	end
-	closeBtn.Clicked = function()
+	closeBtnHandler.Clicked = function()
 		inventoryController:toggleUI()
 	end
 
-	equipBtn.Clicked = function()
-		local equipBtn = equipBtn.properties.Object
+	equipBtnHandler.Clicked = function()
 		local item = HttpService:JSONDecode(equipBtn:GetAttribute("item"))
 
         -- Equip the item
@@ -324,15 +360,15 @@ function inventoryController:KnitStart()
 
     -- Setup slot buttons
 	for _,slot in pairs(slots.slotsFrame:GetChildren()) do
-		if not slot:IsA("GuiObject") then continue end
-		slot = UIhandler.new(slot)
+		if not slot:IsA("GuiObject") then
+            continue
+        end
+		local slotHandler = UIhandler.new(slot)
 
-        -- Handle when clicked
-		slot.Clicked = function()
-			local equipBtn = equipBtn.properties.Object
+		slotHandler.Clicked = function()
 			local item = HttpService:JSONDecode(equipBtn:GetAttribute("item")) -- Getting item data
 
-            local success, result = inventoryService:equipItem(item.category, item.id, slot.properties.Object.Name):await() -- Requesting the equip
+            local success, result = inventoryService:equipItem(item.category, item.id, slot.Name):await() -- Requesting the equip
 
             -- Changes the equip button if the item has been equipped successfully.
             if success and result == true then
@@ -342,7 +378,7 @@ function inventoryController:KnitStart()
                 updateInv(item.tab, true)
             end
 
-			slots.Visible = false -- Hides the slots
+			slots.Visible = false
 		end
 	end
 end
