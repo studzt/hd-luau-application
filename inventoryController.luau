@@ -68,8 +68,7 @@ local function renderItem(frame, item, stroke)
 	if item.category == "nametags" then
 		local textColor = Color3.fromHex(
 			string.match(item.content, "#%x%x%x%x%x%x") -- Extracts the <font color> param from nametag content
-				or "#FFFFFF"
-		) -- Or #FFFFFF
+				or "#FFFFFF") -- Or #FFFFFF
 
 		local darkerTxtColor = Color3.new(
 			math.clamp(textColor.R * 0.5, 0, 1),
